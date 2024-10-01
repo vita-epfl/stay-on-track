@@ -17,6 +17,19 @@ from unitraj.datasets.common_utils import get_polyline_dir, find_true_segments, 
 from unitraj.datasets.types import object_type, polyline_type
 from unitraj.utils.visualization import check_loaded_data
 
+from nuscenes.eval.prediction.splits import get_prediction_challenge_split
+from av2.map.map_api import ArgoverseStaticMap
+from pathlib import Path
+from unitraj.datasets.nuScenes_PGP.nuScenes_vector import NuScenesVector
+import yaml
+from nuscenes import NuScenes
+from nuscenes.prediction import PredictHelper
+from nuscenes.eval.common.utils import quaternion_yaw
+from pyquaternion import Quaternion
+from nuscenes.prediction.input_representation.static_layers import get_patchbox, correct_yaw, angle_of_rotation
+from shapely.ops import unary_union
+from shapely.geometry import Polygon
+
 default_value = 0
 object_type = defaultdict(lambda: default_value, object_type)
 polyline_type = defaultdict(lambda: default_value, polyline_type)
@@ -33,6 +46,13 @@ class BaseDataset(Dataset):
         self.config = config
         self.data_loaded_memory = []
         self.data_chunk_size = 8
+
+        self.nuscenes_tokens = np.array(get_prediction_challenge_split("val" if is_validation else "train", dataroot=config["nuscenes_dataroot"]))
+        with open("unitraj/datasets/nuScenes_PGP/preprocess_nuscenes.yml", 'r') as yaml_file:
+            cfg = yaml.safe_load(yaml_file)
+        ns = NuScenes(cfg['version'], dataroot=config["nuscenes_dataroot"])
+        pred_helper = PredictHelper(ns)
+        self.nuscenes_pgp_dataset = NuScenesVector("invalid_mode", "invalid_dir", cfg, pred_helper)
         self.load_data()
 
     def load_data(self):
@@ -166,7 +186,6 @@ class BaseDataset(Dataset):
         return file_list
 
     def preprocess(self, scenario):
-
         traffic_lights = scenario['dynamic_map_states']
         tracks = scenario['tracks']
         map_feat = scenario['map_features']
@@ -435,6 +454,84 @@ class BaseDataset(Dataset):
         ret_dict['map_center'] = ret_dict['map_center'].repeat(sample_num, axis=0)
         ret_dict['dataset_name'] = [info['dataset']] * sample_num
 
+        ## Adding the node_feats and boundary_polygon_pts differently for 3 datasets
+        if ret_dict['dataset_name'][0] == "nuscenes":
+            scene_ids = ret_dict['scenario_id']
+            scene_token = scene_ids[0].split('_')[1] + "_" + scene_ids[0].split('_')[2]
+            scene_id = int(np.where(self.nuscenes_tokens == scene_token)[0])
+
+            # get centerline node features
+            map_feats = self.nuscenes_pgp_dataset.get_map_representation(scene_id)
+            node_feats = map_feats["lane_node_feats"]
+            node_feats_masks = map_feats["lane_node_masks"]
+
+            # get boundary polygon points
+            num_max_points, max_num_polygons = 726, 12
+            drivable_multipolygon = self.get_drivable_area(scene_ids[0].split('_')[1], scene_ids[0].split('_')[2], self.nuscenes_pgp_dataset.helper, self.nuscenes_pgp_dataset.maps)
+            if isinstance(drivable_multipolygon, Polygon):
+                drivable_multipolygon = [drivable_multipolygon]
+            polygons = list(drivable_multipolygon)
+            polygon_xys = []
+            for polygon in polygons:
+                # Process the exterior ring
+                exterior_xy = np.array(polygon.exterior.coords)
+                if len(exterior_xy) > num_max_points:
+                    print("num_max_points is not enough")
+                xy_fixed_size = np.zeros((num_max_points, 2))
+                xy_fixed_size[:len(exterior_xy), :] = exterior_xy
+                xy_fixed_size[len(exterior_xy):, :] = exterior_xy[-1]
+                polygon_xys.append(xy_fixed_size)
+
+                # Process each interior ring (hole)
+                for interior in polygon.interiors:
+                    interior_xy = np.array(interior.coords)
+                    if len(interior_xy) > num_max_points:
+                        print("num_max_points is not enough")
+                    xy_fixed_size = np.zeros((num_max_points, 2))
+                    xy_fixed_size[:len(interior_xy), :] = interior_xy
+                    xy_fixed_size[len(interior_xy):, :] = interior_xy[-1]
+                    polygon_xys.append(xy_fixed_size)
+            polygon_xys = np.array(polygon_xys)
+            polygon_xys_fixed_size = np.zeros((max_num_polygons, num_max_points, 2))
+            polygon_xys_fixed_size[:len(polygon_xys), :, :] = polygon_xys
+            polygon_xys_fixed_size[len(polygon_xys):, :, :] = 200
+            # rotate the node_feats and polygon_pts 90 degrees counterclockwise
+            # for clock wise, x = -y and y = x
+            # for counter clockwise, x = y and y = -x
+            node_feats = np.concatenate([node_feats[:, :, 1:2], -node_feats[:, :, 0:1], node_feats[:, :, 2:]], axis=-1)
+            polygon_xys_fixed_size = np.concatenate([polygon_xys_fixed_size[:, :, 1:2], -polygon_xys_fixed_size[:, :, 0:1]], axis=-1)
+
+            ret_dict['node_feats'] = [node_feats]
+            ret_dict['node_feats_masks'] = [node_feats_masks]
+            ret_dict['boundary_polygon_pts'] = [polygon_xys_fixed_size]
+        elif ret_dict['dataset_name'][0] == "av2":
+            num_max_points, max_num_polygons = 726, 12
+            polygon_xys_fixed_size = np.ones((max_num_polygons, num_max_points, 2), dtype=np.float32) * 500
+            dataroot = "/mnt/vita/scratch/datasets/Prediction-Dataset/av2/val" if self.is_validation else "/mnt/vita/scratch/datasets/Prediction-Dataset/av2/train"
+            scene_ids = ret_dict["scenario_id"]
+            data_id = scene_ids[0]
+            avm = ArgoverseStaticMap.from_map_dir(Path(dataroot) / data_id, build_raster=False)
+            assert len(avm.get_scenario_vector_drivable_areas()) <= max_num_polygons, f"Error: {len(avm.get_scenario_vector_drivable_areas())} > {max_num_polygons}"
+            for i, drivable_area in enumerate(avm.get_scenario_vector_drivable_areas()):
+                xs = np.array([drivable_area.area_boundary[i].x for i in range(len(drivable_area.area_boundary))])
+                ys = np.array([drivable_area.area_boundary[i].y for i in range(len(drivable_area.area_boundary))])
+                assert len(xs) <= num_max_points, f"Error: {len(xs)} > {num_max_points}"
+                center = ret_dict["center_objects_world"][0][:2]
+                rot = -ret_dict["center_objects_world"][0][6]
+                # translate xs and ys to center and apply rotation
+                xs, ys = xs - center[0], ys - center[1]
+                xs, ys = xs * np.cos(rot) - ys * np.sin(rot), xs * np.sin(rot) + ys * np.cos(rot)
+                polygon_xys_fixed_size[i, :len(xs), 0] = xs
+                polygon_xys_fixed_size[i, :len(ys), 1] = ys
+                polygon_xys_fixed_size[i, len(xs):] = polygon_xys_fixed_size[i, len(xs) - 1]
+            ret_dict['boundary_polygon_pts'] = [polygon_xys_fixed_size]
+            ret_dict['node_feats'] = [np.zeros(0)]  # we don't need node_feats and node_feats_masks for av2, so we put zeros for them
+            ret_dict['node_feats_masks'] = [np.zeros(0)]
+        else:  # for waymo we do not need these data, so we put zeros for them to be consistent with other datasets
+            ret_dict['node_feats'] = [np.zeros(0)] * sample_num
+            ret_dict['node_feats_masks'] = [np.zeros(0)] * sample_num
+            ret_dict['boundary_polygon_pts'] = [np.zeros(0)] * sample_num
+
         ret_list = []
         for i in range(sample_num):
             ret_dict_i = {}
@@ -462,7 +559,7 @@ class BaseDataset(Dataset):
         batch_size = len(batch_list)
         key_to_list = {}
         for key in batch_list[0].keys():
-            key_to_list[key] = [batch_list[bs_idx][key] for bs_idx in range(batch_size)]
+            key_to_list[key] = [batch_list[bs_idx][key] if key in batch_list[bs_idx].keys() else np.zeros(0) for bs_idx in range(batch_size)]
 
         input_dict = {}
         for key, val_list in key_to_list.items():
@@ -476,6 +573,32 @@ class BaseDataset(Dataset):
 
         batch_dict = {'batch_size': batch_size, 'input_dict': input_dict, 'batch_sample_count': batch_size}
         return batch_dict
+
+    def get_drivable_area(self, instance_token, sample_token, helper, maps):
+        """
+        Gets the drivable area of a scene.
+        :param instance_token: Instance token
+        :param sample_token: Sample token
+        :param helper: NuScenes prediction helper object
+        :param maps: dict of Nuscenes map objects
+        :return da_geoms: List of drivable area polygons
+        """
+        # Get the scene record using the scene token
+        map_name = helper.get_map_name_from_sample_token(sample_token)
+        sample_annotation = helper.get_sample_annotation(instance_token, sample_token)
+        # Load the NuScenesMap database
+        nusc_map = maps[map_name]
+        x, y = sample_annotation['translation'][:2]
+        yaw = quaternion_yaw(Quaternion(sample_annotation['rotation']))
+        yaw_corrected = correct_yaw(yaw)
+        image_side_length = 200
+        patchbox = get_patchbox(x, y, image_side_length)
+        angle_in_degrees = angle_of_rotation(yaw_corrected) * 180 / np.pi
+        da_geoms = nusc_map.get_map_geom(patchbox, angle_in_degrees, ['drivable_area'])
+
+        drivable_multipolygon = unary_union(da_geoms[0][1])
+
+        return drivable_multipolygon
 
     def __len__(self):
         return len(self.data_loaded)
