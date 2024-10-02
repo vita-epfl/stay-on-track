@@ -8,7 +8,7 @@
 Ahmad Rahimi, Alexandre Alahi
 </h4>
 <p align="center">
-  <img src="docs/assets/Qualitative.png" alt="Improvement examples of our method" style="width: 70%;"/>
+  <img src="docs/assets/Qualitative.png" alt="Improvement examples of our method" style="width: 90%;"/>
   <br/>
   <span>Highlights: <b>predictions inside drivable area</b>, <b> following traffic flow</b>, and <b>more diverse</b>. </span>
 </p>
@@ -21,11 +21,11 @@ Ahmad Rahimi, Alexandre Alahi
 
 ---
 <p align="center">
-  <img src="docs/assets/losses.png" alt="illustration of introduced losses" style="width: 70%;"/>
+  <img src="docs/assets/losses.png" alt="illustration of introduced losses" style="width: 90%;"/>
   </br>
   <i>An overview of the introduced loss functions.</i>
 </p>
-💡 Trajectory prediction is essential for the safety and efficiency of planning in autonomous vehicles. However, current models often fail to fully capture complex traffic rules and the complete range of potential vehicle movements. Addressing these limitations, this study introduces three novel loss functions: Offroad Loss, Direction Consistency Error, and Diversity Loss. These functions are designed to keep predicted paths within driving area boundaries, aligned with traffic directions, and cover a wider variety of plausible driving scenarios. As all prediction modes should adhere to road rules and conditions, this work overcomes the shortcomings of traditional ``winner takes all" training methods by applying the loss functions to all prediction modes. These loss functions not only improve model training but can also serve as metrics for evaluating the realism and diversity of trajectory predictions. Extensive validation on the nuScenes and Argoverse 2 datasets with leading baseline models demonstrates that our approach not only maintains accuracy but significantly improves safety and robustness, reducing offroad errors on average by 47\% on original and by 37\% on attacked scenes. This work sets a new benchmark for trajectory prediction in autonomous driving, offering substantial improvements in navigating complex environments.
+💡 Trajectory prediction is essential for the safety and efficiency of planning in autonomous vehicles. However, current models often fail to fully capture complex traffic rules and the complete range of potential vehicle movements. Addressing these limitations, this study introduces three novel loss functions: Offroad Loss, Direction Consistency Error, and Diversity Loss. These functions are designed to keep predicted paths within driving area boundaries, aligned with traffic directions, and cover a wider variety of plausible driving scenarios. As all prediction modes should adhere to road rules and conditions, this work overcomes the shortcomings of traditional "winner takes all" training methods by applying the loss functions to all prediction modes. These loss functions not only improve model training but can also serve as metrics for evaluating the realism and diversity of trajectory predictions. Extensive validation on the nuScenes and Argoverse 2 datasets with leading baseline models demonstrates that our approach not only maintains accuracy but significantly improves safety and robustness, reducing offroad errors on average by 47% on original and by 37% on attacked scenes. This work sets a new benchmark for trajectory prediction in autonomous driving, offering substantial improvements in navigating complex environments.
 
 ## News
 
@@ -108,8 +108,10 @@ the code will save the scene names, models' predictions, and per scene metrics i
 ### 🔍 Scene attack evaluation
 
 We have also implemented the scene attack benchmark in UniTraj to evaluate the robustness of models trained with our loss functions.
-You can use the `evaluate_scene_attack.py` script for each of the 12 models in table 2 of our paper. Each model is evaluated on three different attacks with different attack powers and the offroad metrics are saved in pickle files.
+You can use the `evaluate_scene_attack.py` script for each of the 12 models in table 2 of our paper. 
+Each model is evaluated on three different attacks with different attack powers and the offroad metrics are saved in pickle files.
 After all 12 models are evaluated, you can use the `create_table2` function in the `evaluate_scene_attack.py` script to create table 2 of our paper.
+
 ---
 
 
