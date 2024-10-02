@@ -84,7 +84,7 @@ def evaluate_scene_attack(cfg):
 
 
 def create_table2():
-    # Once all 6 models have been evaluated, call this function to print the table for the offroad loss on scene attack benchmark
+    # Once all 12 models have been evaluated, call this function to print the table for the offroad loss on scene attack benchmark
     def do_print(offroads):
         original_offroads, attacked_offroads = offroads
         smooth_offroads = np.stack([attacked_offroads['smooth-turn'][i] for i in [-3, -2, -1, 1, 2, 3]])
@@ -127,3 +127,4 @@ def create_table2():
 
 if __name__ == "__main__":
     evaluate_scene_attack()
+    # create_table2()  # Uncomment this line to print the table for the offroad loss on scene attack benchmark
