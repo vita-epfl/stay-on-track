@@ -1,6 +1,5 @@
 # Stay on Track
 
----
 [//]: # (<a href='http://tencent.github.io/MimicMotion'><img src='https://img.shields.io/badge/Project-Page-Green'></a> <a href='https://arxiv.org/abs/2406.19680'><img src='https://img.shields.io/badge/Paper-Arxiv-red'></a>)
 
 <h3>Stay on Track: Novel Loss Functions for Vehicle Trajectory Prediction
@@ -19,7 +18,6 @@ Ahmad Rahimi, Alexandre Alahi
 
 ## Overview
 
----
 <p align="center">
   <img src="docs/assets/losses.png" alt="illustration of introduced losses" style="width: 90%;"/>
   </br>
@@ -33,7 +31,6 @@ Ahmad Rahimi, Alexandre Alahi
 
 ## Quick Start
 
----
 ### 🛠 Environment setup
 Our code is based on UniTraj, a unified framework for scalable vehicle trajectory prediction.
 Please refer to the [UniTraj repository](https://github.com/vita-epfl/UniTraj) for installation instructions.
@@ -112,10 +109,7 @@ You can use the `evaluate_scene_attack.py` script for each of the 12 models in t
 Each model is evaluated on three different attacks with different attack powers and the offroad metrics are saved in pickle files.
 After all 12 models are evaluated, you can use the `create_table2` function in the `evaluate_scene_attack.py` script to create table 2 of our paper.
 
----
-
-
-### Citation
+## Citation
 If you find our work useful in your research, please consider citing our paper:
 
 Coming soon!
