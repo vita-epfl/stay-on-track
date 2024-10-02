@@ -6,6 +6,7 @@ from torch import optim
 
 from unitraj.models.base_model.base_model import BaseModel
 from .wayformer_utils import PerceiverEncoder, PerceiverDecoder, TrainableQueryProvider
+from unitraj.losses.central_loss import CentralLoss
 
 
 def init(module, weight_init, bias_init, gain=1):
@@ -84,6 +85,7 @@ class Wayformer(BaseModel):
         self.selu = nn.SELU(inplace=True)
 
         self.criterion = Criterion(self.config)
+        self.central_loss = CentralLoss(self.config)
 
         self.fisher_information = None
         self.optimal_params = None
@@ -180,6 +182,10 @@ class Wayformer(BaseModel):
         ground_truth = torch.cat([inputs['center_gt_trajs'][..., :2], inputs['center_gt_trajs_mask'].unsqueeze(-1)],
                                  dim=-1)
         loss = self.criterion(output, ground_truth, inputs['center_gt_final_valid_idx'])
+        if self.config["aux_loss_type"] != "default":
+            aux_loss = self.central_loss(output, inputs)
+            loss = loss * self.config["original_loss_weight"] + aux_loss * self.config["aux_loss_weight"]
+
         output['dataset_name'] = inputs['dataset_name']
         output['predicted_probability'] = F.softmax(output['predicted_probability'], dim=-1)
         return output, loss
@@ -189,6 +195,8 @@ class Wayformer(BaseModel):
 
         scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.0002, steps_per_epoch=1, epochs=150,
                                                         pct_start=0.02, div_factor=100.0, final_div_factor=10)
+        if self.config['finetune']:
+            return [optimizer]
 
         return [optimizer], [scheduler]
 

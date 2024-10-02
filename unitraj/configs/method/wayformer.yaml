@@ -6,7 +6,7 @@ use_map_image: False
 use_map_lanes: True
 num_modes: 6
 num_agent_feature: 39
-num_map_feature: 29
+num_map_feature: 2
 hidden_size: 256
 num_encoder_layers: 2
 num_decoder_layers: 8
@@ -28,7 +28,7 @@ scheduler: multistep # plateau, multistep
 ewc_lambda: 2000
 grad_clip_norm: 5
 train_batch_size: 128 #32 #128
-eval_batch_size: 512 #32 #128
+eval_batch_size: 192 #32 #128
 
 # data related
 max_num_agents: 32

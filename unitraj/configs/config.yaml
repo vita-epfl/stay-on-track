@@ -1,6 +1,7 @@
 # exp setting
 exp_name: 'test' # name that will be used in wandb
-ckpt_path: null # checkpoint path, used for evaluation
+ckpt_path: "last" # checkpoint path, used for evaluation
+finetune: False # finetune the model or train from scratch
 seed: 42 # random seed
 debug: True # debug mode, will use cpu only
 devices: [ 0 ] # gpu ids
@@ -26,6 +27,21 @@ store_data_in_memory: False # store data in memory
 nuscenes_dataroot: '/mnt/nas3_rcp_enac_u0900_vita_scratch/datasets/Prediction-Dataset/nuscenes/nuscenes_root'
 eval_nuscenes: False # whether to evaluate with nuscenes evaluation tool
 eval_waymo: False # whether to evaluate with waymo evaluation tool
+save_predictions: False # whether to save the predictions with their loss metrics during evaluation
+
+# loss
+aux_loss_type: 'default' # options: ('default', 'offroad', 'consistency', 'diversity', 'combination') and default means no auxiliary loss is applied
+original_loss_weight: 0.1
+aux_loss_weight: 1.0
+offroad_margin: 0.5  # margin from road boundary from which the loss becomes nonzero
+consistency_distance_threshold: 2.0  # Distance threshold between centerline points and trajectory points
+consistency_yaw_threshold: 1.04719  # pi/3 yaw threshold between centerline points and trajectory points
+diversity_remove_offroads: True  # whether or not remove offroad trajectories for calculating the diversity metric
+diversity_offroad_threshold: 2.0  # if removing offroad trajectories, what is the threshold for defining a trajectory as offroad
+diversity_all_points: True  # if True, the diversity metric is calculated for all prediction points, as introduced in the paper. False would only calculate the diversity metric for the final points of trajectories.
+offroad_loss_weight: 1.0  # weight of the offroad loss, useful for the combination case
+consistency_loss_weight: 1.0  # weight of the consistency loss, useful for the combination case
+diversity_loss_weight: 1.0  # weight of the diversity loss, useful for the combination case
 
 defaults:
   - method: autobot

@@ -372,6 +372,8 @@ class AutoBotEgo(BaseModel):
         output = self._forward(model_input)
 
         loss = self.get_loss(batch, output)
+        if self.config["aux_loss_type"] != "default":
+            loss = loss * self.config["original_loss_weight"] + self.central_loss(output, inputs) * self.config["aux_loss_weight"]
 
         return output, loss
 

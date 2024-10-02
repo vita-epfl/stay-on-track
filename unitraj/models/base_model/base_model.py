@@ -4,9 +4,12 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import wandb
+import matplotlib.pyplot as plt
+from copy import deepcopy
 
 import unitraj.datasets.common_utils as common_utils
 import unitraj.utils.visualization as visualization
+from unitraj.losses.central_loss import CentralLoss
 
 
 class BaseModel(pl.LightningModule):
@@ -16,9 +19,11 @@ class BaseModel(pl.LightningModule):
         self.config = config
 
         self.pred_dicts = []
+        self.preds_and_losses = []
 
         if config.get('eval_nuscenes', False):
             self.init_nuscenes()
+        self.central_loss = CentralLoss(config)
 
     def init_nuscenes(self):
         if self.config.get('eval_nuscenes', False):
@@ -72,6 +77,20 @@ class BaseModel(pl.LightningModule):
             json.dump(self.pred_dicts, open(os.path.join('submission', "evalai_submission.json"), "w"))
             metric_results = self.compute_metrics_nuscenes(self.pred_dicts)
             print('\n', metric_results)
+        if self.config["save_predictions"]:
+            import os
+            os.makedirs('preds_and_losses', exist_ok=True)
+            names = np.concatenate([x[0] for x in self.preds_and_losses])
+            pred_trajs = np.concatenate([x[1]['predicted_trajectory'] for x in self.preds_and_losses], axis=0)
+            pred_probs = np.concatenate([x[1]['predicted_probability'] for x in self.preds_and_losses], axis=0)
+            losses = {}
+            for key in self.preds_and_losses[0][2].keys():
+                losses[key] = np.concatenate([x[2][key] for x in self.preds_and_losses], axis=0)
+            import pickle
+            file_name = self.config.ckpt_path.split('/')[1]
+            with open(os.path.join('preds_and_losses', file_name + ".pickle"), 'wb') as f:
+                pickle.dump({"scene_names": names, "pred_trajs": pred_trajs, "pred_probs": pred_probs, "losses": losses}, f)
+            self.preds_and_losses = []
         self.pred_dicts = []
 
     def configure_optimizers(self):
@@ -195,12 +214,19 @@ class BaseModel(pl.LightningModule):
         miss_rate = (minfde > 2.0)
         brier_fde = minfde + np.square(1 - predicted_prob)
 
+        with torch.no_grad():
+            additional_metrics = self.central_loss(prediction, inputs, return_all_losses=True, calculate_all_losses=True)
         loss_dict = {
             'minADE6': minade,
             'minFDE6': minfde,
             'miss_rate': miss_rate.astype(np.float32),
-            'brier_fde': brier_fde}
-
+            'brier_fde': brier_fde,
+            'offroad': additional_metrics['offroad_loss'].cpu().numpy(),
+            'consistency': additional_metrics['consistency_loss'].cpu().numpy(),
+            'diversity': additional_metrics['diversity_loss'].cpu().numpy()}
+        if self.config["save_predictions"]:
+            preds = {'predicted_trajectory': prediction["predicted_trajectory"].detach().cpu().numpy(), 'predicted_probability': prediction['predicted_probability'].detach().cpu().numpy()}
+            self.preds_and_losses.append((inputs['scenario_id'], preds, deepcopy(loss_dict)))
         important_metrics = list(loss_dict.keys())
 
         new_dict = {}
@@ -262,8 +288,9 @@ class BaseModel(pl.LightningModule):
         for k, v in loss_dict.items():
             self.log(status + "/" + k, v, on_step=False, on_epoch=True, sync_dist=True, batch_size=size_dict[k])
 
-        if status == 'val' and batch_idx == 0 and not self.config.debug:
-            img = visualization.visualize_prediction(batch, prediction)
-            wandb.log({"prediction": [wandb.Image(img)]})
+        # if status == 'val' and batch_idx == 0 and not self.config.debug:
+        #     img = visualization.visualize_prediction(batch, prediction)
+        #     wandb.log({"prediction": [wandb.Image(img)]})
+            # plt.close()
 
         return
