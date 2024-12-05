@@ -111,20 +111,15 @@ After all 12 models are evaluated, you can use the `create_table2` function in t
 
 ## Citation
 If you find our work useful in your research, please consider citing our paper:
-
-Coming soon!
-
-[//]: # (```)
-
-[//]: # (@article{rahimi2024right,)
-
-[//]: # (  title={Stay on Track: Novel Loss Functions for Vehicle Trajectory Prediction},)
-
-[//]: # (  author={Rahimi, Ahmad and Alahi, Alexandre},)
-
-[//]: # (  journal={arXiv preprint arXiv:2403.15098},)
-
-[//]: # (  year={2024})
-
-[//]: # (})
+```
+@misc{rahimi2024multilossstrategyvehicletrajectory,
+      title={A Multi-Loss Strategy for Vehicle Trajectory Prediction: Combining Off-Road, Diversity, and Directional Consistency Losses}, 
+      author={Ahmad Rahimi and Alexandre Alahi},
+      year={2024},
+      eprint={2411.19747},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2411.19747}, 
+}
+```
 
